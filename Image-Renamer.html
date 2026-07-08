@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Folder Builder &amp; Image Renamer</title>
+<style>
+  :root {
+    --ink: #1c1c1e;
+    --muted: #6b6b70;
+    --line: #e2e2e5;
+    --accent: #2a5bd7;
+    --accent-dark: #1e46ad;
+    --bg-card: #ffffff;
+    --bg-page: #f5f5f7;
+    --danger: #c0392b;
+    --tag-bg: #eef1fb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg-page);
+    color: var(--ink);
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 32px 20px 60px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  .card h2 { font-size: 16px; margin: 0 0 14px; color: var(--ink); }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+  label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); flex: 1; min-width: 180px; }
+  input[type=text], input:not([type]) {
+    font-size: 14px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px;
+    font-family: inherit; color: var(--ink);
+  }
+  input[type=text]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  select {
+    font-size: 14px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px;
+    font-family: inherit; color: var(--ink); background: #fff;
+  }
+  .preview-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px; color: var(--accent-dark); background: var(--tag-bg);
+    border-radius: 6px; padding: 8px 10px; margin: 4px 0 14px; word-break: break-all;
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .tag-chip {
+    display: flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); border-radius: 20px; padding: 6px 12px;
+    font-size: 13px; cursor: pointer; background: #fff; user-select: none;
+  }
+  .tag-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tag-chip .x { opacity: .55; font-size: 12px; padding-left: 2px; }
+  .tag-chip .x:hover { opacity: 1; }
+  .btn-secondary, .btn-primary {
+    border: none; border-radius: 7px; padding: 9px 16px; font-size: 13.5px; cursor: pointer;
+    font-family: inherit; font-weight: 500;
+  }
+  .btn-secondary { background: #eceef1; color: var(--ink); }
+  .btn-secondary:hover { background: #e2e4e8; }
+  .btn-primary { background: var(--accent); color: #fff; margin-top: 14px; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-primary:disabled { background: #b9c6ea; cursor: not-allowed; }
+  .btn-danger { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 13px; }
+  .grip { cursor: grab; color: var(--muted); font-size: 15px; user-select: none; padding: 0 2px; }
+  .grip:active { cursor: grabbing; }
+  .file-cell { display: flex; align-items: center; gap: 6px; }
+  tr.queue-row.dragging { opacity: .4; }
+  tr.queue-row.drop-target { box-shadow: inset 0 2px 0 var(--accent); }
+  .add-tag-form {
+    display: none; margin: -4px 0 14px; padding: 14px;
+    background: var(--tag-bg); border-radius: 8px;
+  }
+  .add-tag-form.open { display: block; }
+  .pattern-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 30px; margin-bottom: 10px; }
+  .pattern-token {
+    display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid var(--line);
+    border-radius: 14px; padding: 4px 10px; font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .pattern-token { cursor: grab; }
+  .pattern-token:active { cursor: grabbing; }
+  .pattern-token.dragging { opacity: .4; }
+  .pattern-token.drop-target { box-shadow: inset 2px 0 0 var(--accent); }
+  .pattern-token .x { cursor: pointer; color: var(--muted); }
+  .pattern-token .x:hover { color: var(--danger); }
+  .builder-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
+  .builder-row .text-token-group { display: flex; gap: 6px; align-items: center; }
+  .builder-row input[type=text] { padding: 8px 9px; }
+  .dropzone {
+    border: 2px dashed #c7cbd4; border-radius: 10px; padding: 30px 16px; text-align: center;
+    color: var(--ink); font-size: 14px; cursor: pointer; background: #fafafc; margin-bottom: 6px;
+  }
+  .dropzone.drag { border-color: var(--accent); background: var(--tag-bg); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  table.queue { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+  table.queue th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.queue td { padding: 7px 8px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; }
+  table.queue img.thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); display: block; }
+  .arrow { color: var(--muted); padding: 0 4px; }
+  .new-name { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+  .empty-row td { text-align: center; color: var(--muted); padding: 18px 8px; font-size: 13px; }
+  .warn { color: var(--danger); font-size: 12.5px; margin-top: 8px; min-height: 16px; }
+  .reorder { display: flex; gap: 3px; }
+  footer.hint { color: var(--muted); font-size: 11.5px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Folder Builder &amp; Image Renamer</h1>
+  <p class="sub">Two independent tools: build a folder skeleton, and/or rename &amp; package images. Renaming never re-compresses a file, so image quality is untouched.</p>
+
+  <section class="card">
+    <h2>Folder Builder</h2>
+    <div class="row">
+      <label>Item description
+        <input type="text" id="itemDesc" placeholder="e.g. Wireless Mouse">
+      </label>
+      <label>SKU
+        <input type="text" id="folderSku" placeholder="e.g. ABC123">
+      </label>
+    </div>
+    <div class="preview-path" id="rootPreview">Folder: [Item description]_[SKU]/</div>
+    <button class="btn-primary" id="folderGenerateBtn" type="button" disabled>Download ZIP</button>
+    <div class="warn" id="folderWarn"></div>
+  </section>
+
+  <section class="card">
+    <h2>Image Renamer</h2>
+    <div class="row" style="margin-bottom:6px;">
+      <label style="max-width:220px;"><span id="identifierLabelText">SKU</span>
+        <input type="text" id="renameSku" placeholder="e.g. ABC123">
+      </label>
+      <label style="max-width:200px;">Retailer-specific
+        <select id="retailerSelect">
+          <option value="none">None</option>
+          <option value="amazon">Amazon</option>
+          <option value="bjs">BJ's</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="tags" id="tagList"></div>
+    <button class="btn-secondary" id="addTagBtn" type="button">+ Add custom tag</button>
+
+    <div class="add-tag-form" id="addTagForm">
+      <div class="muted small" style="margin-bottom:8px;">Build your own pattern: click to add pieces in the order you want them, then set a delimiter.</div>
+      <div class="pattern-row" id="patternTokens"></div>
+      <div class="builder-row">
+        <button class="btn-secondary" id="addSkuTokenBtn" type="button">+ [SKU]</button>
+        <button class="btn-secondary" id="addNTokenBtn" type="button">+ [Number]</button>
+        <div class="text-token-group">
+          <input type="text" id="customTextToken" placeholder="Custom text, e.g. Lifestyle" style="width:170px;">
+          <button class="btn-secondary" id="addTextTokenBtn" type="button">+ Add text</button>
+        </div>
+        <label style="max-width:90px;">Delimiter
+          <input type="text" id="patternDelimiter" value="_" maxlength="3">
+        </label>
+      </div>
+      <div class="preview-path" id="patternPreview">Preview: —</div>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="btn-primary" id="saveTagBtn" type="button" style="margin-top:0;" disabled>Add tag</button>
+        <button class="btn-secondary" id="cancelTagBtn" type="button">Cancel</button>
+      </div>
+    </div>
+
+    <div class="dropzone" id="dropZone">
+      Drag &amp; drop images here for tag: <strong id="activeTagLabel">IO</strong><br>
+      <span class="muted">or click to browse</span>
+      <input type="file" id="fileInput" multiple accept="image/*" style="display:none">
+    </div>
+
+    <table class="queue">
+      <thead><tr><th></th><th>Original file</th><th></th><th>New name</th><th></th></tr></thead>
+      <tbody id="queueBody">
+        <tr class="empty-row"><td colspan="5">No images added yet.</td></tr>
+      </tbody>
+    </table>
+    <p class="muted small" style="margin-top:6px;">Drag rows by the &#9776; handle to reorder — filenames renumber automatically.</p>
+
+    <button class="btn-primary" id="renameGenerateBtn" type="button" disabled>Download ZIP</button>
+    <div class="warn" id="renameWarn"></div>
+    <footer class="hint">Custom tags are saved in this browser for next time. Colleagues opening this same file will start with the default presets until they add their own.</footer>
+  </section>
+</div>
+
+<script>
+/* ---------- ZIP writer (STORE method, no re-compression) ---------- */
+const CRC_TABLE = (() => {
+  let c; const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function utf8Bytes(str) { return new TextEncoder().encode(str); }
+function u16(n) { const b = new Uint8Array(2); b[0]=n&0xFF; b[1]=(n>>>8)&0xFF; return b; }
+function u32(n) { const b = new Uint8Array(4); b[0]=n&0xFF; b[1]=(n>>>8)&0xFF; b[2]=(n>>>16)&0xFF; b[3]=(n>>>24)&0xFF; return b; }
+function concatAll(chunks) {
+  let total = 0; for (const c of chunks) total += c.length;
+  const out = new Uint8Array(total); let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.length; }
+  return out;
+}
+const DOS_TIME = 0x0000, DOS_DATE = 0x0021;
+function makeZip(entries) {
+  const localChunks = [], centralChunks = []; let offset = 0;
+  for (const entry of entries) {
+    const isDir = entry.data == null;
+    const nameBytes = utf8Bytes(entry.path);
+    const data = isDir ? new Uint8Array(0) : entry.data;
+    const crc = isDir ? 0 : crc32(data);
+    const size = data.length;
+    const flag = 0x0800;
+    const localHeader = concatAll([
+      u32(0x04034b50), u16(20), u16(flag), u16(0), u16(DOS_TIME), u16(DOS_DATE),
+      u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0), nameBytes,
+    ]);
+    localChunks.push(localHeader, data);
+    const externalAttr = isDir ? 0x10 : 0x20;
+    const centralHeader = concatAll([
+      u32(0x02014b50), u16(20), u16(20), u16(flag), u16(0), u16(DOS_TIME), u16(DOS_DATE),
+      u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0),
+      u32(externalAttr), u32(offset), nameBytes,
+    ]);
+    centralChunks.push(centralHeader);
+    offset += localHeader.length + data.length;
+  }
+  const centralDir = concatAll(centralChunks);
+  const centralDirOffset = offset, centralDirSize = centralDir.length;
+  const eocd = concatAll([
+    u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length),
+    u32(centralDirSize), u32(centralDirOffset), u16(0),
+  ]);
+  return concatAll([...localChunks, centralDir, eocd]);
+}
+
+function sanitize(str) {
+  return (str || '').trim().replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ');
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function extOf(filename) {
+  const m = /\.([^.]+)$/.exec(filename);
+  return m ? m[1] : '';
+}
+function triggerDownload(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* =====================================================================
+   FOLDER BUILDER
+===================================================================== */
+(function () {
+  const itemDescEl = document.getElementById('itemDesc');
+  const folderSkuEl = document.getElementById('folderSku');
+  const rootPreviewEl = document.getElementById('rootPreview');
+  const folderGenerateBtn = document.getElementById('folderGenerateBtn');
+  const folderWarn = document.getElementById('folderWarn');
+
+  function update() {
+    const desc = sanitize(itemDescEl.value);
+    const sku = sanitize(folderSkuEl.value);
+    if (desc && sku) {
+      rootPreviewEl.textContent = 'Folder: ' + `${desc}_${sku}/`;
+      folderGenerateBtn.disabled = false;
+      folderWarn.textContent = '';
+    } else {
+      rootPreviewEl.textContent = 'Folder: [Item description]_[SKU]/';
+      folderGenerateBtn.disabled = true;
+      folderWarn.textContent = desc || sku ? 'Enter both an item description and a SKU.' : '';
+    }
+  }
+  [itemDescEl, folderSkuEl].forEach(el => el.addEventListener('input', update));
+
+  folderGenerateBtn.addEventListener('click', () => {
+    const desc = sanitize(itemDescEl.value);
+    const sku = sanitize(folderSkuEl.value);
+    const root = `${desc}_${sku}`;
+    const entries = [
+      { path: `${root}/`, data: null },
+      { path: `${root}/x_Digital/`, data: null },
+      { path: `${root}/x_Digital/IO/`, data: null },
+      { path: `${root}/x_Digital/A+/`, data: null },
+      { path: `${root}/y_Additional Imagery/`, data: null },
+      { path: `${root}/z_Archive/`, data: null },
+    ];
+    const zipBytes = makeZip(entries);
+    triggerDownload(new Blob([zipBytes], { type: 'application/zip' }), `${root}.zip`);
+  });
+
+  update();
+})();
+
+/* =====================================================================
+   IMAGE RENAMER
+===================================================================== */
+(function () {
+  const DEFAULT_TAGS = [
+    { id: 'IO', label: 'IO' },
+    { id: 'A+', label: 'A+' },
+    { id: 'Hero', label: 'Hero' },
+    { id: 'Lifestyle', label: 'Lifestyle' },
+    { id: 'Utility', label: 'Utility' },
+    { id: 'ASIN', label: 'Amazon', asin: true },
+    { id: 'BJS', label: "BJ's", bjs: true },
+  ];
+
+  function loadTags() {
+    try {
+      const raw = localStorage.getItem('imgRenamerTagsV2');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          // Make sure the built-in presets are present (and correctly labeled)
+          // even for browsers that already had tags saved from before.
+          const asinTag = parsed.find(t => t.id === 'ASIN');
+          if (asinTag) { asinTag.label = 'Amazon'; asinTag.asin = true; }
+          else parsed.push({ id: 'ASIN', label: 'Amazon', asin: true });
+          if (!parsed.some(t => t.id === 'BJS')) {
+            parsed.push({ id: 'BJS', label: "BJ's", bjs: true });
+          }
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_TAGS.slice();
+  }
+  function saveTags() {
+    try { localStorage.setItem('imgRenamerTagsV2', JSON.stringify(tags)); } catch (e) {}
+  }
+
+  let tags = loadTags();
+  let activeTagId = tags[0].id;
+  let queue = []; // {id, file, tagId} in display/order sequence
+  let seq = 0;
+  let currentRetailer = 'none'; // 'none' | 'amazon' | 'bjs'
+
+  const renameSkuEl = document.getElementById('renameSku');
+  const identifierLabelTextEl = document.getElementById('identifierLabelText');
+  const retailerSelectEl = document.getElementById('retailerSelect');
+  const tagListEl = document.getElementById('tagList');
+  const addTagBtn = document.getElementById('addTagBtn');
+  const addTagForm = document.getElementById('addTagForm');
+  const patternTokensEl = document.getElementById('patternTokens');
+  const addSkuTokenBtn = document.getElementById('addSkuTokenBtn');
+  const addNTokenBtn = document.getElementById('addNTokenBtn');
+  const customTextToken = document.getElementById('customTextToken');
+  const addTextTokenBtn = document.getElementById('addTextTokenBtn');
+  const patternDelimiterEl = document.getElementById('patternDelimiter');
+  const patternPreviewEl = document.getElementById('patternPreview');
+  const saveTagBtn = document.getElementById('saveTagBtn');
+  const cancelTagBtn = document.getElementById('cancelTagBtn');
+  const activeTagLabelEl = document.getElementById('activeTagLabel');
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const queueBody = document.getElementById('queueBody');
+  const renameGenerateBtn = document.getElementById('renameGenerateBtn');
+  const renameWarn = document.getElementById('renameWarn');
+
+  // The single identifier field doubles as SKU, ASIN, or BJ's Article #
+  // depending on which retailer is selected — those tags don't use a SKU at all.
+  function identifierFallback() {
+    if (currentRetailer === 'amazon') return 'ASIN';
+    if (currentRetailer === 'bjs') return 'Article#';
+    return 'SKU';
+  }
+  function currentIdentifierDisplay() {
+    return sanitize(renameSkuEl.value) || identifierFallback();
+  }
+
+  // Renders a tag's naming pattern (custom, token-based tags) given a SKU and position number.
+  function renderFromPattern(tag, skuVal, n) {
+    const parts = tag.pattern.map(tok => {
+      if (tok.type === 'sku') return skuVal;
+      if (tok.type === 'n') return String(n);
+      return tok.value;
+    });
+    return parts.join(tag.delimiter || '');
+  }
+
+  // Every non-pattern tag (including Amazon/BJ's) reads from the one identifier
+  // field, so it "needs" it. Only a custom pattern built without a [SKU] token is exempt.
+  function tagNeedsIdentifier(tag) {
+    if (tag.pattern) return tag.pattern.some(t => t.type === 'sku');
+    return true;
+  }
+
+  // Amazon/BJ's are never picked as chips — they're applied automatically
+  // whenever that retailer is selected, so the chip list only ever shows
+  // regular (non-retailer) tags.
+  function isTagVisible(tag) {
+    return !tag.asin && !tag.bjs;
+  }
+
+  // Which tag should be "active" (and applied to the whole queue) for the
+  // currently selected retailer. Amazon/BJ's force their own tag; otherwise
+  // fall back to whatever the first regular tag is.
+  function defaultTagForRetailer() {
+    if (currentRetailer === 'amazon') return 'ASIN';
+    if (currentRetailer === 'bjs') return 'BJS';
+    const fallback = tags.find(isTagVisible);
+    return fallback ? fallback.id : tags[0].id;
+  }
+
+  function updateRetailerVisibility() {
+    identifierLabelTextEl.textContent = identifierFallback();
+    renameSkuEl.placeholder = currentRetailer === 'amazon' ? 'e.g. B000123456'
+      : currentRetailer === 'bjs' ? 'e.g. 1234567'
+      : 'e.g. ABC123';
+    // With a retailer selected there's nothing to pick — the tag is automatic —
+    // so hide the tag chips and the custom-tag builder entirely.
+    const showTagPicker = currentRetailer === 'none';
+    tagListEl.style.display = showTagPicker ? '' : 'none';
+    addTagBtn.style.display = showTagPicker ? '' : 'none';
+    if (!showTagPicker) addTagForm.classList.remove('open');
+  }
+
+  retailerSelectEl.addEventListener('change', () => {
+    currentRetailer = retailerSelectEl.value;
+    updateRetailerVisibility();
+    // Switching retailers re-tags every already-queued image to match, the
+    // same way clicking a different tag chip does — no blocking guard.
+    activeTagId = defaultTagForRetailer();
+    const activeTag = tags.find(t => t.id === activeTagId) || {};
+    activeTagLabelEl.textContent = activeTag.label || '';
+    queue.forEach(q => { q.tagId = activeTagId; });
+    renderTags();
+    renderQueue();
+    updateGenerateState();
+  });
+
+  function renderTags() {
+    tagListEl.innerHTML = '';
+    tags.filter(isTagVisible).forEach(tag => {
+      const chip = document.createElement('div');
+      chip.className = 'tag-chip' + (tag.id === activeTagId ? ' active' : '');
+      chip.innerHTML = `<span>${escapeHtml(tag.label)}</span><span class="x" title="Remove tag">&times;</span>`;
+      chip.addEventListener('click', (e) => {
+        if (e.target.classList.contains('x')) return;
+        activeTagId = tag.id;
+        activeTagLabelEl.textContent = tag.label;
+        // Re-tag everything already queued so switching tags updates existing files too.
+        queue.forEach(q => { q.tagId = activeTagId; });
+        renderTags();
+        renderQueue();
+        updateGenerateState();
+      });
+      chip.querySelector('.x').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (queue.some(q => q.tagId === tag.id)) {
+          alert('Remove or reassign the images using this tag before deleting it.');
+          return;
+        }
+        tags = tags.filter(t => t.id !== tag.id);
+        if (tags.length === 0) tags = DEFAULT_TAGS.slice();
+        if (activeTagId === tag.id) activeTagId = tags[0].id;
+        saveTags();
+        activeTagLabelEl.textContent = tags.find(t => t.id === activeTagId).label;
+        renderTags();
+      });
+      tagListEl.appendChild(chip);
+    });
+  }
+
+  function computeDisplayQueue() {
+    const idVal = currentIdentifierDisplay();
+    const counters = {};
+    return queue.map(item => {
+      const tag = tags.find(t => t.id === item.tagId) || { label: item.tagId };
+      counters[item.tagId] = (counters[item.tagId] || 0) + 1;
+      const n = counters[item.tagId];
+      const ext = extOf(item.file.name);
+      let newName;
+      if (tag.asin) {
+        const suffix = n === 1 ? 'MAIN' : 'pt' + String(n - 1).padStart(2, '0');
+        newName = `${idVal}.${suffix}` + (ext ? `.${ext}` : '');
+      } else if (tag.bjs) {
+        const suffix = n === 1 ? '' : `__alt${n - 1}`;
+        newName = `${idVal}${suffix}` + (ext ? `.${ext}` : '');
+      } else if (tag.pattern) {
+        newName = renderFromPattern(tag, idVal, n) + (ext ? `.${ext}` : '');
+      } else {
+        newName = `${idVal}_${tag.label}_${n}` + (ext ? `.${ext}` : '');
+      }
+      return { ...item, tag, newName };
+    });
+  }
+
+  let draggedId = null;
+
+  function renderQueue() {
+    const display = computeDisplayQueue();
+    queueBody.innerHTML = '';
+    if (display.length === 0) {
+      queueBody.innerHTML = '<tr class="empty-row"><td colspan="5">No images added yet.</td></tr>';
+    } else {
+      display.forEach((item) => {
+        const tr = document.createElement('tr');
+        tr.className = 'queue-row';
+        tr.draggable = true;
+        tr.dataset.id = item.id;
+        const url = URL.createObjectURL(item.file);
+        tr.innerHTML = `
+          <td><div class="file-cell"><span class="grip" title="Drag to reorder">&#9776;</span><img class="thumb" draggable="false" src="${url}" onload="URL.revokeObjectURL(this.src)"></div></td>
+          <td>${escapeHtml(item.file.name)}</td>
+          <td class="arrow">&rarr;</td>
+          <td class="new-name">${escapeHtml(item.newName)}</td>
+          <td><button class="btn-danger" data-id="${item.id}">Remove</button></td>
+        `;
+        tr.querySelector('.btn-danger').addEventListener('click', () => {
+          queue = queue.filter(q => q.id !== item.id);
+          renderQueue();
+          updateGenerateState();
+        });
+
+        tr.addEventListener('dragstart', (e) => {
+          draggedId = item.id;
+          tr.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', item.id);
+        });
+        tr.addEventListener('dragend', () => {
+          tr.classList.remove('dragging');
+          queueBody.querySelectorAll('.queue-row').forEach(r => r.classList.remove('drop-target'));
+          draggedId = null;
+        });
+        tr.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (draggedId && draggedId !== item.id) tr.classList.add('drop-target');
+        });
+        tr.addEventListener('dragleave', () => tr.classList.remove('drop-target'));
+        tr.addEventListener('drop', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          tr.classList.remove('drop-target');
+          const sourceId = draggedId || e.dataTransfer.getData('text/plain');
+          const targetId = item.id;
+          if (!sourceId || sourceId === targetId) return;
+          const fromIdx = queue.findIndex(q => q.id === sourceId);
+          const toIdx = queue.findIndex(q => q.id === targetId);
+          if (fromIdx === -1 || toIdx === -1) return;
+          const [moved] = queue.splice(fromIdx, 1);
+          queue.splice(toIdx, 0, moved);
+          renderQueue();
+        });
+
+        queueBody.appendChild(tr);
+      });
+    }
+  }
+
+  function identifierPhrase() {
+    if (currentRetailer === 'amazon') return 'an ASIN';
+    if (currentRetailer === 'bjs') return "a BJ's Article #";
+    return 'a SKU';
+  }
+
+  function updateGenerateState() {
+    const idVal = sanitize(renameSkuEl.value);
+    const needsIdentifier = queue.some(q => tagNeedsIdentifier(tags.find(t => t.id === q.tagId) || {}));
+    let ok = true, msg = '';
+    if (queue.length === 0) { ok = false; msg = 'Add at least one image.'; }
+    else if (needsIdentifier && !idVal) { ok = false; msg = `Enter ${identifierPhrase()} before generating.`; }
+    renameWarn.textContent = ok ? '' : msg;
+    renameGenerateBtn.disabled = !ok;
+  }
+
+  /* ---- Custom tag pattern builder ---- */
+  let builderPattern = [];
+  let draggedTokenIdx = null;
+
+  function tokenText(tok) {
+    if (tok.type === 'sku') return '[SKU]';
+    if (tok.type === 'n') return '[Number]';
+    return tok.value;
+  }
+
+  function renderPatternTokens() {
+    patternTokensEl.innerHTML = '';
+    if (builderPattern.length === 0) {
+      patternTokensEl.innerHTML = '<span class="muted small">Nothing added yet — use the buttons below.</span>';
+    } else {
+      builderPattern.forEach((tok, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'pattern-token';
+        chip.draggable = true;
+        chip.title = 'Drag to reorder';
+        chip.innerHTML = `${escapeHtml(tokenText(tok))}<span class="x" title="Remove">&times;</span>`;
+
+        chip.querySelector('.x').addEventListener('click', (e) => {
+          e.stopPropagation();
+          builderPattern.splice(i, 1);
+          renderPatternTokens();
+          updatePatternPreview();
+        });
+
+        chip.addEventListener('dragstart', (e) => {
+          draggedTokenIdx = i;
+          chip.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(i));
+        });
+        chip.addEventListener('dragend', () => {
+          chip.classList.remove('dragging');
+          patternTokensEl.querySelectorAll('.pattern-token').forEach(c => c.classList.remove('drop-target'));
+          draggedTokenIdx = null;
+        });
+        chip.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (draggedTokenIdx !== null && draggedTokenIdx !== i) chip.classList.add('drop-target');
+        });
+        chip.addEventListener('dragleave', () => chip.classList.remove('drop-target'));
+        chip.addEventListener('drop', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          chip.classList.remove('drop-target');
+          const from = draggedTokenIdx;
+          const to = i;
+          if (from === null || from === to) return;
+          const [moved] = builderPattern.splice(from, 1);
+          builderPattern.splice(to, 0, moved);
+          renderPatternTokens();
+          updatePatternPreview();
+        });
+
+        patternTokensEl.appendChild(chip);
+      });
+    }
+    addNTokenBtn.disabled = builderPattern.some(t => t.type === 'n');
+    saveTagBtn.disabled = builderPattern.length === 0;
+  }
+
+  function updatePatternPreview() {
+    if (builderPattern.length === 0) {
+      patternPreviewEl.textContent = 'Preview: —';
+      return;
+    }
+    const delim = patternDelimiterEl.value || '';
+    const idVal = currentIdentifierDisplay();
+    const parts = builderPattern.map(t => t.type === 'sku' ? idVal : t.type === 'n' ? '1' : t.value);
+    patternPreviewEl.textContent = 'Preview: ' + parts.join(delim) + '.jpg';
+  }
+
+  addSkuTokenBtn.addEventListener('click', () => {
+    builderPattern.push({ type: 'sku' });
+    renderPatternTokens();
+    updatePatternPreview();
+  });
+  addNTokenBtn.addEventListener('click', () => {
+    if (builderPattern.some(t => t.type === 'n')) return;
+    builderPattern.push({ type: 'n' });
+    renderPatternTokens();
+    updatePatternPreview();
+  });
+  addTextTokenBtn.addEventListener('click', () => {
+    const val = sanitize(customTextToken.value);
+    if (!val) { customTextToken.focus(); return; }
+    builderPattern.push({ type: 'text', value: val });
+    customTextToken.value = '';
+    renderPatternTokens();
+    updatePatternPreview();
+  });
+  customTextToken.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addTextTokenBtn.click(); }
+  });
+  patternDelimiterEl.addEventListener('input', updatePatternPreview);
+
+  addTagBtn.addEventListener('click', () => {
+    addTagForm.classList.add('open');
+    builderPattern = [];
+    patternDelimiterEl.value = '_';
+    customTextToken.value = '';
+    renderPatternTokens();
+    updatePatternPreview();
+  });
+  cancelTagBtn.addEventListener('click', () => addTagForm.classList.remove('open'));
+  saveTagBtn.addEventListener('click', () => {
+    if (builderPattern.length === 0) return;
+    const delimiter = patternDelimiterEl.value || '';
+    const label = builderPattern.map(tokenText).join(delimiter);
+    if (tags.some(t => t.label.toLowerCase() === label.toLowerCase())) {
+      alert('A tag with this exact pattern already exists.');
+      return;
+    }
+    const id = 'custom__' + Date.now();
+    tags.push({ id, label, pattern: builderPattern.slice(), delimiter });
+    saveTags();
+    activeTagId = id;
+    activeTagLabelEl.textContent = label;
+    addTagForm.classList.remove('open');
+    renderTags();
+  });
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('drag'); });
+  });
+  dropZone.addEventListener('drop', e => {
+    const files = Array.from(e.dataTransfer.files || []);
+    addFiles(files);
+  });
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    addFiles(Array.from(fileInput.files || []));
+    fileInput.value = '';
+  });
+  ['dragover', 'drop'].forEach(evt => {
+    window.addEventListener(evt, e => e.preventDefault());
+  });
+
+  function addFiles(files) {
+    files.forEach(file => {
+      queue.push({ id: 'f' + (seq++), file, tagId: activeTagId });
+    });
+    renderQueue();
+    updateGenerateState();
+  }
+
+  renameSkuEl.addEventListener('input', () => {
+    renderTags();
+    renderQueue();
+    updatePatternPreview();
+    updateGenerateState();
+  });
+
+  renameGenerateBtn.addEventListener('click', async () => {
+    renameGenerateBtn.disabled = true;
+    renameGenerateBtn.textContent = 'Building…';
+    try {
+      const display = computeDisplayQueue();
+      const entries = [];
+      for (const item of display) {
+        const buf = await item.file.arrayBuffer();
+        entries.push({ path: item.newName, data: new Uint8Array(buf) });
+      }
+      const zipBytes = makeZip(entries);
+      const namePart = sanitize(renameSkuEl.value) || 'Renamed';
+      triggerDownload(new Blob([zipBytes], { type: 'application/zip' }), `${namePart}_Images.zip`);
+    } catch (err) {
+      alert('Something went wrong building the ZIP: ' + err.message);
+      console.error(err);
+    } finally {
+      renameGenerateBtn.textContent = 'Download ZIP';
+      updateGenerateState();
+    }
+  });
+
+  /* init */
+  updateRetailerVisibility();
+  renderTags();
+  renderQueue();
+  updateGenerateState();
+})();
+</script>
+</body>
+</html>
