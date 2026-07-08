@@ -129,6 +129,7 @@
     </div>
     <div class="preview-path" id="rootPreview">Folder: [Item description]_[SKU]/</div>
     <button class="btn-primary" id="folderGenerateBtn" type="button" disabled>Download ZIP</button>
+    <button class="btn-secondary" id="folderClearBtn" type="button" style="margin-top:14px;">Clear all</button>
     <div class="warn" id="folderWarn"></div>
   </section>
 
@@ -151,7 +152,7 @@
     <button class="btn-secondary" id="addTagBtn" type="button">+ Add custom tag</button>
 
     <div class="add-tag-form" id="addTagForm">
-      <div class="muted small" style="margin-bottom:8px;">Build your own pattern: click to add pieces in the order you want them, then set a delimiter.</div>
+      <div class="muted small" style="margin-bottom:8px;">Build your own pattern: click to add pieces in the order you want them and set a delimiter if needed. You can rearrange the pieces by dragging and dropping.</div>
       <div class="pattern-row" id="patternTokens"></div>
       <div class="builder-row">
         <button class="btn-secondary" id="addSkuTokenBtn" type="button">+ [SKU]</button>
@@ -186,6 +187,7 @@
     <p class="muted small" style="margin-top:6px;">Drag rows by the &#9776; handle to reorder — filenames renumber automatically.</p>
 
     <button class="btn-primary" id="renameGenerateBtn" type="button" disabled>Download ZIP</button>
+    <button class="btn-secondary" id="renameClearBtn" type="button" style="margin-top:14px;">Clear all</button>
     <div class="warn" id="renameWarn"></div>
     <footer class="hint">Custom tags are saved in this browser for next time. Colleagues opening this same file will start with the default presets until they add their own.</footer>
   </section>
@@ -277,6 +279,7 @@ function triggerDownload(blob, filename) {
   const folderSkuEl = document.getElementById('folderSku');
   const rootPreviewEl = document.getElementById('rootPreview');
   const folderGenerateBtn = document.getElementById('folderGenerateBtn');
+  const folderClearBtn = document.getElementById('folderClearBtn');
   const folderWarn = document.getElementById('folderWarn');
 
   function update() {
@@ -308,6 +311,12 @@ function triggerDownload(blob, filename) {
     ];
     const zipBytes = makeZip(entries);
     triggerDownload(new Blob([zipBytes], { type: 'application/zip' }), `${root}.zip`);
+  });
+
+  folderClearBtn.addEventListener('click', () => {
+    itemDescEl.value = '';
+    folderSkuEl.value = '';
+    update();
   });
 
   update();
@@ -377,6 +386,7 @@ function triggerDownload(blob, filename) {
   const fileInput = document.getElementById('fileInput');
   const queueBody = document.getElementById('queueBody');
   const renameGenerateBtn = document.getElementById('renameGenerateBtn');
+  const renameClearBtn = document.getElementById('renameClearBtn');
   const renameWarn = document.getElementById('renameWarn');
 
   // The single identifier field doubles as SKU, ASIN, or BJ's Article #
@@ -600,7 +610,7 @@ function triggerDownload(blob, filename) {
   function renderPatternTokens() {
     patternTokensEl.innerHTML = '';
     if (builderPattern.length === 0) {
-      patternTokensEl.innerHTML = '<span class="muted small">Nothing added yet — use the buttons below.</span>';
+      patternTokensEl.innerHTML = '';
     } else {
       builderPattern.forEach((tok, i) => {
         const chip = document.createElement('span');
@@ -742,6 +752,14 @@ function triggerDownload(blob, filename) {
 
   renameSkuEl.addEventListener('input', () => {
     renderTags();
+    renderQueue();
+    updatePatternPreview();
+    updateGenerateState();
+  });
+
+  renameClearBtn.addEventListener('click', () => {
+    renameSkuEl.value = '';
+    queue = [];
     renderQueue();
     updatePatternPreview();
     updateGenerateState();
